@@ -1,6 +1,9 @@
 use kira::{
     manager::{AudioManager, AudioManagerSettings, backend::DefaultBackend},
-    sound::static_sound::{StaticSoundData, StaticSoundHandle, StaticSoundState},
+    sound::{
+        static_sound::{StaticSoundData, StaticSoundHandle},
+        PlaybackState,
+    },
 };
 use std::{
     sync::mpsc::{Sender, Receiver, channel},
@@ -20,21 +23,17 @@ pub fn start_audio_thread() -> Sender<AudioCommand> {
         let mut manager =
             AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
 
-        // AudioManager はこのスレッドが生存している限り動き続ける
         while let Ok(cmd) = rx.recv() {
             match cmd {
                 AudioCommand::Play(path) => {
                     let data = StaticSoundData::from_file(path).unwrap();
                     let handle = manager.play(data).unwrap();
 
-                    // 再生終了まで待つ専用スレッドを起動
+                    // 再生終了まで待つ専用スレッド
                     thread::spawn(move || {
-                        // 音声が終わるまで自動で待つ
-                        while handle.state() != StaticSoundState::Stopped {
+                        while handle.state() != PlaybackState::Stopped {
                             thread::sleep(std::time::Duration::from_millis(10));
                         }
-                        // 再生終了後に必要なら何か処理できる
-                        // println!("再生終了");
                     });
                 }
             }
@@ -44,7 +43,7 @@ pub fn start_audio_thread() -> Sender<AudioCommand> {
     tx
 }
 
-/// Audio は「再生要求を送るだけ」の軽量構造
+/// Audio は「再生要求を送るだけ」
 pub struct Audio {
     tx: Sender<AudioCommand>,
 }
