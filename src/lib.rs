@@ -3,19 +3,20 @@ use kira::{
     sound::static_sound::StaticSoundData,
 };
 use std::{
-    sync::{mpsc::{Sender, Receiver, channel}, Arc},
+    sync::mpsc::{Sender, Receiver, channel},
     thread,
 };
 
 /// 再生コマンド
-enum AudioCommand {
+pub enum AudioCommand {
     Play(String),
 }
 
 /// AudioManager を永続スレッドで動かす
-fn start_audio_thread() -> Sender<AudioCommand> {
+pub fn start_audio_thread() -> Sender<AudioCommand> {
     let (tx, rx): (Sender<AudioCommand>, Receiver<AudioCommand>) = channel();
 
+    // AudioManager を独立スレッドで永続させる
     thread::spawn(move || {
         let mut manager =
             AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
@@ -34,7 +35,7 @@ fn start_audio_thread() -> Sender<AudioCommand> {
     tx
 }
 
-/// Audio は単なる「再生要求を送るだけ」の構造にする
+/// Audio は「再生要求を送るだけ」の軽量構造にする
 pub struct Audio {
     tx: Sender<AudioCommand>,
 }
