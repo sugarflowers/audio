@@ -1,7 +1,7 @@
 use kira::{
     manager::{AudioManager, AudioManagerSettings, backend::DefaultBackend},
     sound::{
-        static_sound::{StaticSoundData},
+        static_sound::StaticSoundData,
         PlaybackState,
     },
 };
@@ -13,8 +13,8 @@ use std::{
 /// グローバル AudioManager
 static mut MANAGER: Option<Arc<Mutex<AudioManager<DefaultBackend>>>> = None;
 
-/// 再生スレッドを保持する（プログラム終了防止）
-static mut PLAY_THREAD: Option<JoinHandle<()>> = None;
+/// 再生ワーカーの JoinHandle を保持する
+static mut WORKERS: Vec<JoinHandle<()>> = Vec::new();
 
 /// 初期化
 pub fn init_audio_manager() {
@@ -35,32 +35,32 @@ impl Audio {
         Audio
     }
 
-    /// 非ブロッキング再生（メイン処理は止まらない）
-    /// ただしプログラム終了時に再生が終わるまで終了しない
+    /// 非ブロッキング再生ワーカーを作成
     pub fn play(&self, file_path: &str) {
         let data = StaticSoundData::from_file(file_path).unwrap();
         let manager = unsafe { MANAGER.as_ref().unwrap().clone() };
         let handle = manager.lock().unwrap().play(data).unwrap();
 
-        // 再生終了まで待つスレッド（非ブロッキング）
-        let t = thread::spawn(move || {
+        // 再生ワーカー（非ブロッキング）
+        let worker = thread::spawn(move || {
             while handle.state() != PlaybackState::Stopped {
                 thread::sleep(std::time::Duration::from_millis(10));
             }
+            // 再生終了 → スレッドは自動で破棄される
         });
 
-        // スレッドを保持しておく（プログラム終了防止）
+        // ワーカーを保持（プログラム終了防止）
         unsafe {
-            PLAY_THREAD = Some(t);
+            WORKERS.push(worker);
         }
     }
 }
 
-/// プログラム終了時に呼ぶ（再生が終わるまで終了しない）
-pub fn wait_for_audio() {
+/// プログラム終了時に呼ぶ（全ワーカーが終わるまで終了しない）
+pub fn wait_for_all_audio() {
     unsafe {
-        if let Some(t) = PLAY_THREAD.take() {
-            let _ = t.join();
+        for worker in WORKERS.drain(..) {
+            let _ = worker.join();
         }
     }
 }
