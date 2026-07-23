@@ -56,7 +56,7 @@ impl Audio {
             WORKERS.push(worker);
         }
     }
-    //*/
+    */
     
     pub fn play(&self, file_path: &str) {
         unsafe {
