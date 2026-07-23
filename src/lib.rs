@@ -12,6 +12,7 @@ use std::{
 
 /// グローバル AudioManager
 static mut MANAGER: Option<Arc<Mutex<AudioManager<DefaultBackend>>>> = None;
+static mut CURRENT_HANDLE: Option<kira::sound::handle::Handle> = None;
 
 /// 再生ワーカーの JoinHandle を保持する
 static mut WORKERS: Vec<JoinHandle<()>> = Vec::new();
@@ -35,7 +36,8 @@ impl Audio {
         Audio
     }
 
-    /// 非ブロッキング再生ワーカーを作成
+    /*
+    // 非ブロッキング再生ワーカーを作成
     pub fn play(&self, file_path: &str) {
         let data = StaticSoundData::from_file(file_path).unwrap();
         let manager = unsafe { MANAGER.as_ref().unwrap().clone() };
@@ -54,6 +56,36 @@ impl Audio {
             WORKERS.push(worker);
         }
     }
+    //*/
+    
+    pub fn play(&self, file_path: &str) {
+        unsafe {
+            if let Some(handle) = &CURRENT_HANDLE {
+                let _ = handle.stop(kira::tween::Tween::default());
+            }
+        }
+    
+        let data = StaticSoundData::from_file(file_path).unwrap();
+        let manager = unsafe { MANAGER.as_ref().unwrap().clone() };
+        let handle = manager.lock().unwrap().play(data).unwrap();
+    
+        unsafe {
+            CURRENT_HANDLE = Some(handle.clone());
+        }
+    
+        let worker = thread::spawn(move || {
+            while handle.state() != PlaybackState::Stopped {
+                thread::sleep(std::time::Duration::from_millis(10));
+            }
+        });
+    
+        unsafe {
+            WORKERS.push(worker);
+        }
+    }
+
+
+    
 }
 
 /// プログラム終了時に呼ぶ（全ワーカーが終わるまで終了しない）
